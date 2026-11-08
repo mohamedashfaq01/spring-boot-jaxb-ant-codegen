@@ -16,7 +16,7 @@ import java.util.UUID;
 
 /**
  * AuthorizationService demonstrates that the JAXB-generated classes
- * (produced by the {@code genJaxb} Gradle task via Apache Ant → XJC) are
+ * (produced by the {@code genJaxb} Gradle task via the XJC Gradle plugin) are
  * fully usable within application business logic.
  *
  * <p><b>Important JAXB naming convention note:</b><br>

@@ -1,4 +1,4 @@
-# 01 — Concepts: SOAP, WSDL, XSD, JAXB, Ant
+# 01 — Concepts: SOAP, WSDL, XSD, JAXB, Ant and Gradle
 
 If you already know REST + JSON, think of this stack as **the older, more formal way two companies talked over HTTP**. Same internet, stricter paperwork.
 
@@ -25,7 +25,7 @@ They cannot “just send JSON and hope”. Lawyers, auditors, and mainframes wan
 | The form fields on the agreement: amount must be a number, currency must be 3 letters | **XSD** |
 | The filled-in form stuffed in a standard envelope with a return address | **SOAP** |
 | A clerk who copies the form into your internal filing system (Java objects) and back | **JAXB** |
-| The old factory assembly line that prints the clerk’s filing templates from the agreement | **Ant + XJC** |
+| The code generator that prints Java filing templates from the agreement | **XJC** |
 
 REST/JSON is more like a text message: fast, flexible, easy to break if someone renames a field. SOAP/XML is more like a registered letter.
 
@@ -168,35 +168,34 @@ Without JAXB you would hand-write POJOs and parse XML with `DocumentBuilder`. JA
 
 **What broke.** Starting with **Java 11 (2018)**, Oracle removed Java EE APIs from the JDK. JAXB is no longer “free with Java”. You add it as a Maven/Gradle dependency.
 
-**Jakarta rename.** Java EE became **Jakarta EE**. Package `javax.xml.bind` became `jakarta.xml.bind`. Mixing the two on one classpath is a classic `ClassNotFoundException`. This project uses **Jakarta JAXB 4.x** (`jakarta.xml.bind-api` + `com.sun.xml.bind:jaxb-impl:4.0.5`), which matches **Jakarta EE 10** and **Spring Boot 3**.
+**Jakarta rename.** Java EE became **Jakarta EE**. Package `javax.xml.bind` became `jakarta.xml.bind`. Mixing the two on one classpath is a classic `ClassNotFoundException`. This project uses **Jakarta JAXB 4.x** (`jakarta.xml.bind-api` 4.0.5 + `org.glassfish.jaxb:jaxb-runtime` / `jaxb-xjc` 4.0.9), which matches **Jakarta EE 10** and **Spring Boot 4.0.8**.
 
 **Still used?** Yes, whenever Java talks to XML contracts. New JSON APIs use Jackson. XML/SOAP integrations still use JAXB (or XMLBeans, or CXF’s databinding). It is not trendy. It is still the default in a lot of banks.
 
 ---
 
-## Apache Ant
+## Apache Ant and Gradle
 
 **What it is.** A 2000-era Java build tool. You write `build.xml` with targets like `compile`, `jar`, `xjc`. Tasks are XML; there is no real dependency graph like Gradle.
 
 **When it was popular.** **~2000–2012**. Almost every Java shop used Ant, then many moved to Maven (~2004 onward), then Gradle.
 
-**Still used?** Not for new apps. Still appears in:
+**Still used?** Ant still appears in:
 
 - Old enterprise code generators (JAXB XJC has a first-class **Ant task**: `com.sun.tools.xjc.XJCTask`)
 - Places that never migrated the “generate sources” step even after the app itself moved to Maven/Gradle
-- This POC, **on purpose**, to show the legacy generation style inside a modern Gradle build
+- Legacy projects and build steps that already depend on Ant task definitions
 
-Gradle still embeds Ant (`project.ant` / `AntBuilder`). That is the trick this repo uses:
+Ant and XJC are distinct: XJC is the schema compiler, and Ant is one way to invoke it. Gradle can also run XJC through a dedicated Gradle plugin or a Java execution task. This project previously called XJC through Gradle's embedded AntBuilder; the current build has replaced that integration with the `com.github.bjornvester.xjc` Gradle plugin:
 
 ```
-Gradle task genJaxb
-    → project.ant.taskdef (register XJC as an Ant task)
-    → ant.xjc (run the same Ant task old build.xml files ran)
+Gradle XJC plugin task
+    → XJC 4.0.9
     → Java sources under build/generated-sources/jaxb
     → compileJava
 ```
 
-So: **Gradle owns the build. Ant owns the XJC invocation.** That is what “Ant-based approach as we followed here” means.
+Gradle owns the whole build and generation workflow. Ant is discussed here as a common legacy way to launch XJC; it is no longer used by this repository's build.
 
 ---
 
@@ -221,6 +220,6 @@ timeline
 - WSDL: the SOAP equivalent of OpenAPI.
 - XSD: the schema language inside the WSDL.
 - JAXB: Java XML databinding. Still needed. Must be a dependency since Java 11.
-- Ant: old build tool. We keep it only to run XJC the way legacy pipelines did.
+- Ant: mature legacy build tool. This repository now invokes XJC through a Gradle plugin instead.
 
 Next: [02 — Architecture](02-architecture.md).

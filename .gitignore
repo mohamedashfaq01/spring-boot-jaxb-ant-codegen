@@ -1,0 +1,24 @@
+# Gradle caches and generated build output
+.gradle/
+build/
+
+# Maven output (not currently used, but conventional for Java builds)
+target/
+
+# IntelliJ IDEA per-user files; project configuration files remain shareable
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/shelf/
+.idea/dictionaries/
+.idea/httpRequests/
+*.iml
+
+# Operating system and editor temporary files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*.tmp
+
+# Application logs
+*.log

@@ -158,8 +158,8 @@
       <div class="eyebrow">Spring Boot JAXB POC · interactive edition</div>
       <h1>From XML contract<br>to Java objects.</h1>
       <p class="hero-copy">A visual tour of SOAP, WSDL, XSD, JAXB, Ant and Gradle—using the files and generated classes in this repository as the source of truth.</p>
-      <div class="hero-meta"><span class="pill">Java 21</span><span class="pill">Spring Boot 3.4</span><span class="pill">Gradle 8.11</span><span class="pill">Jakarta JAXB 4</span></div>
-      <div class="truth"><span class="truth-icon">i</span><div><strong>First, what this project does—and doesn’t do</strong><span>Gradle invokes XJC through embedded Ant to generate model classes from the standalone XSD. The app serves REST/JSON and simulates authorization. It does not send SOAP or call the WSDL endpoint.</span></div></div>
+      <div class="hero-meta"><span class="pill">Java 21</span><span class="pill">Spring Boot 4.0.8</span><span class="pill">Gradle 8.14.6</span><span class="pill">Jakarta JAXB 4</span></div>
+      <div class="truth"><span class="truth-icon">i</span><div><strong>First, what this project does—and doesn’t do</strong><span>The XJC Gradle plugin generates model classes from the standalone XSD. The app serves REST/JSON and simulates authorization. It does not send SOAP or call the WSDL endpoint.</span></div></div>
     </header>
 
     <div class="workspace">
@@ -169,7 +169,7 @@
         <button class="tab" role="tab" id="tab-contract" aria-controls="contract" aria-selected="false" data-tab="contract"><span class="tab-number">02</span> WSDL &amp; XSD</button>
         <button class="tab" role="tab" id="tab-soap" aria-controls="soap" aria-selected="false" data-tab="soap"><span class="tab-number">03</span> SOAP envelope</button>
         <button class="tab" role="tab" id="tab-jaxb" aria-controls="jaxb" aria-selected="false" data-tab="jaxb"><span class="tab-number">04</span> JAXB binding</button>
-        <button class="tab" role="tab" id="tab-build" aria-controls="build" aria-selected="false" data-tab="build"><span class="tab-number">05</span> Ant + Gradle</button>
+        <button class="tab" role="tab" id="tab-build" aria-controls="build" aria-selected="false" data-tab="build"><span class="tab-number">05</span> Gradle + XJC</button>
         <button class="tab" role="tab" id="tab-namespace" aria-controls="namespace" aria-selected="false" data-tab="namespace"><span class="tab-number">06</span> javax → jakarta</button>
         <button class="tab" role="tab" id="tab-simulator" aria-controls="simulator" aria-selected="false" data-tab="simulator"><span class="tab-number">07</span> Try the simulator</button>
       </nav>
@@ -182,7 +182,7 @@
             <button class="concept" data-concept="wsdl"><span class="concept-num">02</span><strong>WSDL</strong><small>The service contract</small></button>
             <button class="concept" data-concept="xsd"><span class="concept-num">03</span><strong>XSD</strong><small>The XML data shape</small></button>
             <button class="concept" data-concept="jaxb"><span class="concept-num">04</span><strong>JAXB</strong><small>XML ↔ Java mapping</small></button>
-            <button class="concept" data-concept="build"><span class="concept-num">05</span><strong>Ant + Gradle</strong><small>Build and generation</small></button>
+            <button class="concept" data-concept="build"><span class="concept-num">05</span><strong>Gradle + XJC</strong><small>Build and generation</small></button>
           </div>
           <article class="card pad detail-card" id="concept-detail" aria-live="polite"></article>
           <div class="card pad" style="margin-top:14px">
@@ -248,23 +248,23 @@
         </section>
 
         <section class="panel" id="build" role="tabpanel" aria-labelledby="tab-build" tabindex="0">
-          <div class="section-head"><div><div class="kicker">05 / Build pipeline</div><h2>Gradle coordinates. Ant runs XJC.</h2><p class="section-intro">There is no standalone <code>build.xml</code>. Gradle owns this build; its embedded AntBuilder registers and invokes XJC.</p></div></div>
+          <div class="section-head"><div><div class="kicker">05 / Build pipeline</div><h2>Gradle plugin runs XJC.</h2><p class="section-intro">There is no standalone <code>build.xml</code> and no AntBuilder call. The XJC Gradle plugin handles schema generation and generated-source integration.</p></div></div>
           <div class="split">
             <div class="build-track" id="build-track"></div>
             <article class="card pad build-detail" id="build-detail" aria-live="polite"></article>
           </div>
           <div class="card pad" style="margin-top:14px"><div class="kicker">Who does what?</div>
             <div class="type-grid" style="margin-top:13px">
-              <div class="type-card"><span class="type">GRADLE</span><h3>Build orchestrator</h3><p>Resolves dependencies, models task inputs/outputs, adds generated sources to the Java source set and makes <code>compileJava</code> depend on <code>genJaxb</code>.</p></div>
-              <div class="type-card"><span class="type">APACHE ANT</span><h3>Task execution API</h3><p>Ant's XJC task is registered via <code>taskdef</code>, then invoked with schema, output folder and package options. It runs inside Gradle; it is not a second build system here.</p></div>
+              <div class="type-card"><span class="type">GRADLE</span><h3>Build orchestrator</h3><p>Resolves dependencies, orders code generation before Java compilation, and packages the Spring Boot application.</p></div>
+              <div class="type-card"><span class="type">XJC PLUGIN</span><h3>Schema generation integration</h3><p>The plugin configures XJC 4.0.9, its isolated generator classpath, the XSD input and generated Java source output. It replaces the old AntBuilder invocation.</p></div>
             </div>
-            <div class="dependency-flow"><span>XSD input</span><i>→</i><span>genJaxb task</span><i>→</i><span>Ant + XJC</span><i>→</i><span>generated Java</span><i>→</i><span>compileJava</span></div>
+            <div class="dependency-flow"><span>XSD input</span><i>→</i><span>XJC plugin task</span><i>→</i><span>XJC 4.0.9</span><i>→</i><span>generated Java</span><i>→</i><span>compileJava</span></div>
           </div>
           <div class="card pad" style="margin-top:14px"><div class="kicker">Runtime vs generator dependencies</div><div style="overflow-x:auto"><table class="mapping-table"><thead><tr><th>Purpose</th><th>Project declaration</th><th>Why it is there</th></tr></thead><tbody>
-            <tr><td>JAXB API</td><td><code>jakarta.xml.bind-api:4.0.2</code> (`implementation`)</td><td>Types/annotations available to application compilation</td></tr>
-            <tr><td>JAXB provider</td><td><code>com.sun.xml.bind:jaxb-impl:4.0.5</code> (`runtimeOnly`)</td><td>Runtime implementation if the app performs JAXB binding</td></tr>
-            <tr><td>XJC toolchain</td><td>Dedicated <code>jaxb</code> configuration, including <code>jaxb-xjc:4.0.5</code></td><td>Only needed when generating sources</td></tr>
-          </tbody></table></div><p class="note" style="margin:15px 0 0">The build file comments label `jaxb-impl` as MOXy, but the declared `com.sun.xml.bind` coordinates and generated file header identify the JAXB RI family. The dependency coordinates are what this guide uses to identify the provider.</p></div>
+            <tr><td>JAXB API</td><td><code>jakarta.xml.bind-api</code> 4.0.5 (`implementation`)</td><td>Types/annotations available to application compilation</td></tr>
+            <tr><td>JAXB provider</td><td><code>org.glassfish.jaxb:jaxb-runtime</code> 4.0.9 (`runtimeOnly`)</td><td>Runtime implementation if the app performs JAXB binding</td></tr>
+            <tr><td>XJC toolchain</td><td>XJC Gradle plugin 1.9.1 with XJC 4.0.9</td><td>Plugin-managed generator classpath, separate from app runtime</td></tr>
+          </tbody></table></div><p class="note" style="margin:15px 0 0">Runtime versions come from the Spring Boot 4.0.8 BOM. The provider is the GlassFish JAXB RI, not EclipseLink MOXy. The XJC Gradle plugin is community-maintained; see the migration note for details.</p></div>
         </section>
 
         <section class="panel" id="namespace" role="tabpanel" aria-labelledby="tab-namespace" tabindex="0">
@@ -272,7 +272,7 @@
           <div class="two-col">
             <article class="namespace old"><div class="kicker" style="color:var(--coral)">Legacy JAXB 2.x</div><h3><code>javax.xml.bind</code></h3><p>Java EE-era API. JAXB was bundled in Java 8 and present as a deprecated module in Java 9/10. Java 11 removed the Java EE modules and tools; later JDKs need explicit dependencies.</p><pre>import javax.xml.bind.JAXBContext;
 import javax.xml.bind.annotation.XmlElement;</pre></article>
-            <article class="namespace new"><div class="kicker">Jakarta JAXB 3+/4</div><h3><code>jakarta.xml.bind</code></h3><p>Jakarta EE namespace after Java EE moved to the Eclipse Foundation. Spring Boot 3 is in the Jakarta generation. This repository uses JAXB API 4.0.2 and RI runtime/tooling 4.0.5.</p><pre>import jakarta.xml.bind.JAXBContext;
+            <article class="namespace new"><div class="kicker">Jakarta JAXB 3+/4</div><h3><code>jakarta.xml.bind</code></h3><p>Jakarta EE namespace after Java EE moved to the Eclipse Foundation. Spring Boot 4 is in the Jakarta generation. This repository uses JAXB API 4.0.5 and RI runtime/tooling 4.0.9 from the Boot BOM.</p><pre>import jakarta.xml.bind.JAXBContext;
 import jakarta.xml.bind.annotation.XmlElement;</pre></article>
           </div>
           <div class="card pad" style="margin-top:14px"><div class="kicker">Keep each stack internally consistent</div><div class="dependency-flow"><span>Jakarta generated classes</span><i>→</i><span>Jakarta JAXB API</span><i>→</i><span>Jakarta provider</span></div><p class="note" style="margin:17px 0 0">Avoid mixing generated `javax` classes with a Jakarta-only runtime. Both namespaces can technically load in one JVM, but their `JAXBContext`, annotations and `JAXBElement` types are different and do not interoperate automatically. Migrate dependencies and regenerate sources together. Do not rename every `javax.*`: `javax.xml.datatype` remains Java SE.</p></div>
@@ -303,7 +303,7 @@ import jakarta.xml.bind.annotation.XmlElement;</pre></article>
       wsdl: { title: "WSDL — the service contract", copy: "WSDL connects data types to messages, operations, protocol bindings and an endpoint. Its types section can contain or import XSD.", project: "Project connection: the sample WSDL describes AuthorizeTransaction, request/response/fault messages, SOAP binding and an example service address." },
       xsd: { title: "XSD — the XML data shape", copy: "XSD specifies element names, types, order, optionality and value constraints. It lets tools validate XML and generate matching Java types.", project: "Project connection: genJaxb points to wsdl/ESBTransactionAuthorization_v1_0.xsd. It is the actual XJC input, not the full WSDL." },
       jaxb: { title: "JAXB — XML ↔ Java data binding", copy: "XJC generates schema-bound Java classes at build time. A JAXB runtime can marshal objects into XML and unmarshal XML into objects at runtime.", project: "Project connection: generated classes are used as Java models. The service does not call a Marshaller or Unmarshaller." },
-      build: { title: "Gradle + embedded Ant — build and generator", copy: "Gradle resolves dependencies and orders tasks. Its AntBuilder registers the XJC Ant task and invokes it with the project schema.", project: "Project connection: Gradle owns the build; no standalone build.xml exists. compileJava depends on genJaxb." }
+      build: { title: "Gradle + XJC plugin — build and generator", copy: "Gradle resolves dependencies and orders tasks. The XJC plugin registers schema generation and integrates generated Java with compilation.", project: "Project connection: Gradle owns the build; XJC plugin 1.9.1 runs XJC 4.0.9. There is no standalone build.xml or AntBuilder call." }
     };
     const detail = document.getElementById("concept-detail");
     function chooseConcept(key) {
@@ -384,11 +384,11 @@ import jakarta.xml.bind.annotation.XmlElement;</pre></article>
 
     const buildSteps = [
       ["XSD file", "The standalone schema is the code generator input.", "`wsdl/ESBTransactionAuthorization_v1_0.xsd` contains the types extracted from the WSDL types section. The WSDL itself is not passed to XJC."],
-      ["Gradle: genJaxb", "Task declares its input and generated output directory.", "The Groovy build task gives Gradle enough information to order generation and perform up-to-date checks when the schema and outputs have not changed."],
-      ["AntBuilder: taskdef", "Register XJC using the isolated jaxb classpath.", "`project.ant.taskdef` loads `com.sun.tools.xjc.XJCTask` with the declared generator dependencies, separate from application runtime dependencies."],
-      ["Ant: xjc", "Run XJC with schema, destination package and extension option.", "The task invokes `ant.xjc(...)` and writes Java sources in `de.consorsbank.consumingwebservice.wsdl`. XJC generates JAXB models, not SOAP service proxies."],
-      ["Generated source", "Write classes under build/generated-sources/jaxb.", "The generated directory is registered in the main Java source set and marked as generated sources for IntelliJ. Generated files are build output."],
-      ["compileJava", "Compile generated and handwritten Java together.", "`compileJava.dependsOn genJaxb` makes generation happen before the AuthorizationService imports are compiled. Spring Boot packages/runs the resulting application."]
+      ["Gradle XJC plugin", "Plugin 1.9.1 configures generation in the Gradle task graph.", "The plugin manages the XJC compiler classpath, generator task, schema inputs and generated-source integration. It replaces the previous AntBuilder task."],
+      ["XJC 4.0.9", "Compile the schema into Jakarta JAXB model source.", "The build selects Jakarta mode, the application package and the XJC extension option. XJC generates model classes, not SOAP service proxies."],
+      ["Generated source", "Write classes under build/generated-sources/jaxb.", "The plugin adds the configured output directory to main Java compilation. Generated files are build output and should not be edited by hand."],
+      ["Java compilation", "Compile generated and handwritten source together.", "The plugin wires code generation before Java compilation, so AuthorizationService can import the generated request and response models."],
+      ["Spring Boot app", "Run the JSON API and local authorization simulation.", "The application exposes REST endpoints. It does not marshal SOAP XML or contact the WSDL endpoint."]
     ];
     const buildTrack = document.getElementById("build-track");
     buildSteps.forEach((step, index) => { const button = document.createElement("button"); button.className = "build-step" + (index === 0 ? " active" : ""); button.dataset.index = index; button.innerHTML = `<span class="n">${String(index + 1).padStart(2, "0")}</span><span><strong>${step[0]}</strong><small>${step[1]}</small></span><span class="arrow">→</span>`; buildTrack.appendChild(button); });

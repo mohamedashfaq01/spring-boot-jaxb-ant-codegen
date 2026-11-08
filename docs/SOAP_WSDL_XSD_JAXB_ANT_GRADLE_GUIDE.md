@@ -18,13 +18,13 @@ This guide starts with the contract and follows it into generated Java types and
 
 ## 1. What this repository actually does
 
-The project is a Java 21, Spring Boot 3.4.0 application built by Gradle 8.11. Its core demonstration is **schema-to-Java code generation**: Gradle runs Apache Ant's XJC task against a standalone XSD, then compiles the generated JAXB model classes together with handwritten Java.
+The project is a Java 21, Spring Boot 4.0.8 application built by Gradle 8.14.6. Its core demonstration is **schema-to-Java code generation**: the XJC Gradle plugin runs XJC against a standalone XSD, then Gradle compiles the generated JAXB model classes together with handwritten Java.
 
 It is deliberately **not a live SOAP client**. The WSDL describes a SOAP 1.2 service and endpoint, but the application exposes a REST/JSON controller and simulates the authorization decision in Java. There is no HTTP SOAP transport, SOAP envelope processing, or generated WSDL client proxy in the current implementation.
 
 | Location | Observed role |
 |---|---|
-| `build.gradle` | Gradle Java/Spring plugins, JAXB dependencies, `genJaxb` task using Gradle's AntBuilder, generated source registration, and `compileJava` dependency |
+| `build.gradle` | Gradle Java/Spring/XJC plugins, JAXB dependencies, XJC configuration and a `genJaxb` alias |
 | `wsdl/ESBTransactionAuthorization_v1_0.wsdl` | Full example WSDL: schema types, messages, operation, SOAP binding, service and sample endpoint |
 | `wsdl/ESBTransactionAuthorization_v1_0.xsd` | Standalone extracted schema; actual `genJaxb` input |
 | `AuthorizationService.java` | Creates XJC-generated request and response objects; simulates decision; no marshal or SOAP call |
@@ -33,15 +33,15 @@ It is deliberately **not a live SOAP client**. The WSDL describes a SOAP 1.2 ser
 | `src/main/resources/application.yml` | Spring application name and HTTP port 8080 |
 | `build/generated-sources/jaxb/...` | Build output containing generated model types (not maintained source) |
 
-There is no root `pom.xml` and no standalone `build.xml`. Thus **Gradle owns and orchestrates the build**; Ant is used as an embedded task runner solely to invoke XJC. The `jaxb` Gradle configuration is the isolated classpath used by XJC.
+There is no root `pom.xml` and no standalone `build.xml`. **Gradle owns and orchestrates the build**, using the `com.github.bjornvester.xjc` plugin to run XJC and register generated source. The project previously used AntBuilder (`ant.taskdef` and `ant.xjc`) for that step; that integration has been removed.
 
 ### Dependency and namespace audit
 
-The application compiles against `jakarta.xml.bind:jakarta.xml.bind-api:4.0.2` and has `com.sun.xml.bind:jaxb-impl:4.0.5` as a runtime dependency. XJC tooling (`jaxb-xjc:4.0.5`, plus API, implementation, and activation API) is on the dedicated `jaxb` configuration, not the application runtime configuration. The old `javax.xml.bind:jaxb-api` artifact is excluded from that tool configuration.
+The application compiles against `jakarta.xml.bind:jakarta.xml.bind-api` (Boot BOM 4.0.5) and has `org.glassfish.jaxb:jaxb-runtime` (Boot BOM 4.0.9) as a runtime dependency. The XJC Gradle plugin 1.9.1 runs XJC 4.0.9 on its generator classpath, isolated from the application's runtime classpath. The old `javax.xml.bind:jaxb-api` artifact is not part of this Jakarta setup.
 
 Generated sources use `jakarta.xml.bind` annotations. Handwritten application code also imports `javax.xml.datatype.*`; that is a separate Java SE API for XML Schema date/time values, and it remains `javax` in current Java. `javax.xml.datatype` does **not** mean this application uses the old JAXB namespace.
 
-One build comment calls `com.sun.xml.bind:jaxb-impl` “EclipseLink MOXy.” The coordinates identify the JAXB Reference Implementation (GlassFish JAXB RI), not EclipseLink MOXy. MOXy is a distinct provider, normally identified by EclipseLink MOXy artifacts. The dependency declaration is the evidence for the actual runtime implementation; this documentation does not change the build.
+The runtime provider is the JAXB Reference Implementation (GlassFish JAXB RI) via `org.glassfish.jaxb:jaxb-runtime`. EclipseLink MOXy is a different provider and is not used here.
 
 ## 2. SOAP
 
@@ -265,20 +265,20 @@ Typical Jakarta JAXB 4 setup (versions shown for illustration; use a compatible 
 
 ```gradle
 dependencies {
-    implementation 'jakarta.xml.bind:jakarta.xml.bind-api:4.0.2'
-    runtimeOnly 'org.glassfish.jaxb:jaxb-runtime:4.0.5'
+    implementation 'jakarta.xml.bind:jakarta.xml.bind-api'
+    runtimeOnly 'org.glassfish.jaxb:jaxb-runtime'
 }
 ```
 
-This repository instead declares `com.sun.xml.bind:jaxb-impl:4.0.5` as runtime and uses that implementation plus `com.sun.xml.bind:jaxb-xjc:4.0.5` in the generator configuration. Both are RI-family coordinates. Its API is 4.0.2. A matching JAXB 4.x API/provider family works on Java 17/21; Java version alone does not select the namespace.
+This repository declares `org.glassfish.jaxb:jaxb-runtime` as runtime and uses that implementation plus `org.glassfish.jaxb:jaxb-xjc` in the generator configuration. Versions come from the Spring Boot 4.0.8 BOM (API 4.0.5, RI 4.0.9). A matching JAXB 4.x API/provider family works on Java 17/21; Java version alone does not select the namespace.
 
 ### API versus runtime/provider
 
 | Piece | What it provides | Project configuration |
 |---|---|---|
-| API | Public types such as `JAXBContext`, `Marshaller`, annotations | `implementation jakarta.xml.bind:jakarta.xml.bind-api:4.0.2` |
-| Runtime/provider | Concrete JAXB engine discovered at runtime | `runtimeOnly com.sun.xml.bind:jaxb-impl:4.0.5` |
-| Compiler/tool | Reads schema and writes Java source | `jaxb` configuration includes `jaxb-xjc:4.0.5` |
+| API | Public types such as `JAXBContext`, `Marshaller`, annotations | `implementation jakarta.xml.bind:jakarta.xml.bind-api` (4.0.5) |
+| Runtime/provider | Concrete JAXB engine discovered at runtime | `runtimeOnly org.glassfish.jaxb:jaxb-runtime` (4.0.9) |
+| Compiler/tool | Reads schema and writes Java source | `jaxb` configuration includes `jaxb-xjc` (4.0.9) |
 | Activation API | Supporting API used by the tool/runtime ecosystem | `jaxb` config includes `jakarta.activation-api:2.1.3` |
 
 API without a provider can compile but fail when `JAXBContext.newInstance` looks for an implementation. XJC needs its own compile/runtime tool dependencies and should generally not leak into the application's runtime classpath.
@@ -303,7 +303,7 @@ The source transformation may look mechanical, but dependencies, generated sourc
 
 Both namespaces can technically be present in one JVM because their fully qualified class names differ. That does not make types interoperable. Coexistence increases classpath and integration complexity and is usually appropriate only for deliberate isolation/bridging, not as a fix for a mixed dependency graph.
 
-Spring Boot 3 / Spring Framework 6 uses Jakarta EE APIs where applicable; new Boot 3 applications should generally choose Jakarta JAXB. Spring Boot 2-era integrations commonly use `javax` dependencies. The project is Boot 3.4 and uses Jakarta JAXB 4.
+Spring Boot 3 / Spring Framework 6 and Spring Boot 4 / Framework 7 use Jakarta EE APIs where applicable; modern Boot applications should generally choose Jakarta JAXB. Spring Boot 2-era integrations commonly use `javax` dependencies. This project uses Spring Boot 4.0.8 and Jakarta JAXB 4.
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
@@ -362,11 +362,11 @@ flowchart TD
     RunXJC --> Compile[Run javac after generation]
 ```
 
-Ant execution resolves the requested target, runs dependencies first, then tasks in declared order. XJC is registered as an Ant task through `taskdef`, then receives the schema and output directory. This repository has no standalone `build.xml`; these Ant concepts are used through Gradle's embedded AntBuilder.
+Ant execution resolves the requested target, runs dependencies first, then tasks in declared order. XJC can be registered as an Ant task through `taskdef`, then receive the schema and output directory. This Ant example is included for comparison only: this repository has no standalone `build.xml` and its current build does not use AntBuilder.
 
 ### Gradle basics and lifecycle
 
-Gradle is a build automation system with a task graph, plugins, dependency configurations, incremental execution and a Groovy/Kotlin DSL. `build.gradle` is this project's Groovy DSL build script. Plugins contribute conventions and tasks. Configurations (such as `implementation`, `runtimeOnly`, and custom `jaxb`) define dependency classpaths and resolution roles.
+Gradle is a build automation system with a task graph, plugins, dependency configurations, incremental execution and a Groovy/Kotlin DSL. `build.gradle` is this project's Groovy DSL build script. Plugins contribute conventions and tasks. Configurations such as `implementation` and `runtimeOnly` define dependency classpaths and resolution roles.
 
 The familiar lifecycle is initialization (which projects exist), configuration (evaluate build scripts and register/configure tasks), and execution (run the selected task graph). In modern Gradle, task actions should be lazy and outputs/inputs declared so tasks can be skipped or cached appropriately.
 
@@ -375,45 +375,34 @@ flowchart LR
     Init[Initialization: settings.gradle selects project] --> Config[Configuration: plugins, dependencies, task graph]
     Config --> Select[Requested task, for example bootRun]
     Select --> Graph[Resolve dependencies and task dependencies]
-    Graph --> Gen[genJaxb: AntBuilder invokes XJC]
+    Graph --> Gen[XJC plugin task]
     Gen --> Compile[compileJava compiles handwritten and generated Java]
     Compile --> Package[classes / bootJar / run as requested]
 ```
 
-### How this Gradle build uses Ant
+### How this Gradle build generates JAXB classes
 
-The `genJaxb` task declares the XSD as an input and generated source directory as output. It defines XJC on Ant's classpath using `configurations.jaxb.asPath`, then calls `ant.xjc(...)`. `compileJava.dependsOn genJaxb` encodes producer-before-consumer ordering. The generated directory is added to `sourceSets.main.java`, so normal compilation sees the generated sources.
+The `com.github.bjornvester.xjc` plugin receives the XSD directory, selected schema file, generated source directory, Jakarta mode, XJC version and Java package. It owns the generation task and connects generated sources to Java compilation. A `genJaxb` alias depends on the plugin's XJC task so the familiar command remains available.
 
 ```mermaid
 flowchart TD
-    Start[Gradle task graph] --> Gen[genJaxb task]
-    Gen --> Ant[Gradle project.ant / AntBuilder]
-    Ant --> Def[taskdef loads com.sun.tools.xjc.XJCTask]
-    Def --> XJC[XJC reads standalone XSD]
+    Start[Gradle task graph] --> Plugin[XJC Gradle plugin task]
+    Plugin --> XJC[XJC 4.0.9 reads standalone XSD]
     XJC --> Sources[build/generated-sources/jaxb]
     Sources --> Compile[compileJava compiles all main Java sources]
 ```
 
-Equivalent Gradle fragment (simplified; repository-specific version/dependency declarations are in `build.gradle`):
+Current Gradle plugin configuration (simplified; full configuration is in `build.gradle`):
 
 ```groovy
-configurations { jaxb }
-dependencies { jaxb 'com.sun.xml.bind:jaxb-xjc:4.0.5' }
-
-def generated = layout.buildDirectory.dir('generated-sources/jaxb')
-sourceSets.main.java.srcDir(generated)
-
-tasks.register('genJaxb') {
-    inputs.file('wsdl/ESBTransactionAuthorization_v1_0.xsd')
-    outputs.dir(generated)
-    doLast {
-        ant.taskdef(name: 'xjc', classname: 'com.sun.tools.xjc.XJCTask',
-                    classpath: configurations.jaxb.asPath)
-        ant.xjc(schema: file('wsdl/ESBTransactionAuthorization_v1_0.xsd'),
-                 destdir: generated.get().asFile, package: 'example.ws')
-    }
+xjc {
+    xsdDir.set(layout.projectDirectory.dir('wsdl'))
+    includes.set(['ESBTransactionAuthorization_v1_0.xsd'])
+    outputJavaDir.set(layout.buildDirectory.dir('generated-sources/jaxb'))
+    useJakarta.set(true)
+    xjcVersion.set('4.0.9')
+    defaultPackage.set('de.consorsbank.consumingwebservice.wsdl')
 }
-tasks.named('compileJava') { dependsOn('genJaxb') }
 ```
 
 ### Ant versus Gradle
@@ -429,7 +418,7 @@ tasks.named('compileJava') { dependsOn('genJaxb') }
 | Strength | Simple, explicit, mature legacy integration | Rich dependency graph, plugins, incremental builds, scalable multi-project support |
 | Trade-off | More manual wiring and dependency management | More concepts/configuration complexity; build logic is executable code |
 
-Modern projects commonly use Gradle or Maven for integrated dependency management, lifecycle conventions and repeatable builds. Ant remains useful for existing pipelines and tools that expose Ant tasks. This repository demonstrates both: Gradle controls the build and dependency graph; Ant executes XJC.
+Modern projects commonly use Gradle or Maven for integrated dependency management, lifecycle conventions and repeatable builds. Ant remains useful for existing pipelines and tools that expose Ant tasks. This repository's current build uses Gradle and the XJC Gradle plugin; an earlier version invoked XJC through embedded Ant.
 
 ## 8. How the pieces fit together
 
@@ -439,9 +428,8 @@ Modern projects commonly use Gradle or Maven for integrated dependency managemen
 flowchart LR
     subgraph BuildTime[Build time]
         WSDL[WSDL contract] -. schema extracted into .-> XSD[Standalone XSD]
-        XSD --> Gradle[Gradle genJaxb task]
-        Gradle --> Ant[Embedded Ant XJC task]
-        Ant --> XJC[XJC]
+        XSD --> Gradle[Gradle XJC plugin task]
+        Gradle --> XJC[XJC 4.0.9]
         XJC --> Java[Generated JAXB Java types]
         Java --> Compile[Java compilation]
     end
@@ -490,17 +478,18 @@ Key `build.gradle` declarations, paraphrased from the file:
 ```groovy
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '3.4.0'
-    id 'io.spring.dependency-management' version '1.1.6'
+    id 'org.springframework.boot' version '4.0.8'
+    id 'io.spring.dependency-management' version '1.1.7'
+    id 'com.github.bjornvester.xjc' version '1.9.1'
 }
 java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
 ```
 
-These make Gradle a Java build, apply Spring Boot conventions and request Java 21 toolchain compilation. The wrapper pins Gradle 8.11 in `gradle/wrapper/gradle-wrapper.properties`.
+These make Gradle a Java build, apply Spring Boot conventions and request Java 21 toolchain compilation. The wrapper pins Gradle 8.14.6 in `gradle/wrapper/gradle-wrapper.properties` (Spring Boot 4 requires Gradle 8.14+ or 9.x).
 
-The `implementation` API dependency is available to compile and run application code. `runtimeOnly` provides the JAXB provider at application runtime. Custom `jaxb` is used only to launch XJC. This avoids treating the generator as an application API dependency. The two exclusions prevent an old `javax` API from entering the XJC tool classpath.
+The `implementation` API dependency is available to compile generated sources and run application code. `runtimeOnly` provides the JAXB provider at application runtime. The XJC Gradle plugin keeps its generator toolchain separate from the application dependencies. `build.gradle` sets `addCompilationDependencies` to false because the project declares the API itself and lets the Spring Boot BOM select its version.
 
-The task specifies `schema`, `destdir`, `package`, and `extension`. It processes `wsdl/ESBTransactionAuthorization_v1_0.xsd`, not the full WSDL. Its output is registered as a main source directory. `compileJava.dependsOn genJaxb` ensures source generation precedes compilation.
+The `xjc {}` block selects the schema file, output path, package, Jakarta namespace and extension option. It processes `wsdl/ESBTransactionAuthorization_v1_0.xsd`, not the full WSDL. The plugin registers its output as a main source directory and connects generation to compilation. `genJaxb` is a convenience alias to the plugin task.
 
 ### Schema to generated Java
 
@@ -557,12 +546,12 @@ Those calls would serialize/parse the XML payload only. A separate SOAP client s
 
 | Question | Answer for this repository |
 |---|---|
-| Ant, Gradle, or both? | Gradle owns the build; embedded AntBuilder runs XJC. No standalone `build.xml`. |
+| Ant, Gradle, or both? | Gradle owns the build; XJC Gradle plugin runs XJC. No AntBuilder or standalone `build.xml`. |
 | Is the WSDL processed by the task? | No. The task points to the extracted standalone XSD. |
 | Does it generate a SOAP client? | No. It generates JAXB model types only. |
 | Is SOAP sent at runtime? | No. Authorization is simulated in-process behind REST/JSON endpoints. |
 | JAXB package? | `jakarta.xml.bind` 4.x. `javax.xml.datatype` is a separate Java SE API. |
-| Runtime provider? | `com.sun.xml.bind:jaxb-impl:4.0.5`, the JAXB RI family; build comments describing it as MOXy are inaccurate. |
+| Runtime provider? | `org.glassfish.jaxb:jaxb-runtime` 4.0.9, the JAXB RI (not EclipseLink MOXy). |
 | Where are sources? | `build/generated-sources/jaxb`, generated as part of build. |
 
 ### Common terms
@@ -580,8 +569,8 @@ Those calls would serialize/parse the XML payload only. A separate SOAP client s
 
 ### Troubleshooting checklist
 
-1. Confirm the generated source directory exists after `genJaxb` and that the expected package matches Java imports.
-2. Confirm `compileJava` depends on `genJaxb`; otherwise clean builds may compile before generated files exist.
+1. Confirm the generated source directory exists after `./gradlew genJaxb` and that the expected package matches Java imports.
+2. Confirm the XJC plugin's generation task is wired before Java compilation; the plugin supplies this producer/consumer dependency.
 3. For “package does not exist,” inspect whether generated sources are registered and whether API imports use the correct namespace.
 4. For JAXB runtime provider errors, distinguish missing API from missing implementation; the API alone is not an engine.
 5. Inspect dependency resolution for duplicate JAXB API versions and `javax`/`jakarta` mixing.
@@ -595,7 +584,7 @@ Those calls would serialize/parse the XML payload only. A separate SOAP client s
 - [Jakarta XML Binding API documentation](https://jakarta.ee/specifications/xml-binding/4.0/apidocs/)
 - [Oracle Java 11 release notes: removed tools and components](https://www.oracle.com/java/technologies/javase/11-relnote-issues.html)
 - [JEP 320: Remove the Java EE and CORBA Modules](https://openjdk.org/jeps/320)
-- [Spring Boot 3 migration guide](https://github.com/spring-projects/spring-boot/wiki/Spring-Boot-3.0-Migration-Guide)
+- [Spring Boot 4 migration guide](https://github.com/spring-projects/spring-boot/wiki/Spring-Boot-4.0-Migration-Guide)
 - [Apache Ant manual](https://ant.apache.org/manual/)
 - [Gradle user manual](https://docs.gradle.org/current/userguide/userguide.html)
 - [W3C XML Schema](https://www.w3.org/XML/Schema)

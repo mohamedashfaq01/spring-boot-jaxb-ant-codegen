@@ -83,7 +83,7 @@ curl -s http://localhost:8080/api/health
   "status": "UP",
   "jaxbClassLoaded": "de.consorsbank.consumingwebservice.wsdl.TransactionAuthorizationRequestType",
   "message": "JAXB-generated class 'TransactionAuthorizationRequestType' is available on the runtime classpath",
-  "generatedBy": "XJC 4.0.5 via Apache Ant (Gradle genJaxb task)"
+    "generatedBy": "XJC 4.0.9 via Gradle XJC plugin (genJaxb task)"
 }
 ```
 
@@ -201,7 +201,7 @@ JAXB’s job in a real client would be: Java object ↔ that inner XML. SOAP’s
 
 | Symptom | Likely cause |
 |---------|----------------|
-| `cannot find symbol TransactionAuthorizationRequestType` | `genJaxb` did not run; check `compileJava.dependsOn genJaxb` |
+| `cannot find symbol TransactionAuthorizationRequestType` | XJC generation did not run; check the XJC plugin task and `xjc` schema/output configuration |
 | XJC / `ClassNotFoundException` around `javax.xml.bind` | Old JAXB API on the tool classpath |
 | App starts but you use another port | Something else bound `8080`; check `application.yml` |
 | `NullPointerException` on `amount` | JSON body missing `amount` — controller does `body.get("amount").toString()` with no validation |

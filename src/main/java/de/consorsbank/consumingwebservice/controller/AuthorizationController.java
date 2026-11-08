@@ -62,7 +62,7 @@ public class AuthorizationController {
         status.put("jaxbClassLoaded",  req.getClass().getName());
         status.put("message",
                 "JAXB-generated class 'TransactionAuthorizationRequestType' is available on the runtime classpath");
-        status.put("generatedBy",      "XJC 4.0.5 via Apache Ant (Gradle genJaxb task)");
+        status.put("generatedBy",      "XJC 4.0.9 via Gradle XJC plugin (genJaxb task)");
         return ResponseEntity.ok(status);
     }
 

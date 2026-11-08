@@ -6,8 +6,8 @@ A **proof of concept**, not a production payment engine.
 
 | It does | It does not |
 |---------|-------------|
-| Generate JAXB classes from the ESB XSD using **Ant XJC** | Call the real Consorsbank ESB |
-| Compile those classes with **Java 21** and **Spring Boot 3.4** | Generate full SOAP client stubs |
+| Generate JAXB classes from the ESB XSD using the **Gradle XJC plugin** | Call the real Consorsbank ESB |
+| Compile those classes with **Java 21** and **Spring Boot 4.0.8** | Generate full SOAP client stubs |
 | Expose REST JSON so you can prove the classes work | Send or receive a SOAP envelope on the wire |
 | Mock approve/decline using the generated types | Persist anything or talk to a database |
 
@@ -64,7 +64,7 @@ Springboot-JAXB-POC/
 │   └── service/AuthorizationService.java       ← uses generated types
 ├── src/main/resources/application.yml          ← port 8080
 ├── src/test/java/.../ApplicationTest.java
-├── build.gradle                                ← genJaxb Ant task lives here
+├── build.gradle                                ← XJC plugin config lives here
 └── build/generated-sources/jaxb/...            ← created at build time, do not edit
 ```
 
@@ -72,52 +72,63 @@ Generated sources are **not** committed as the source of truth. They appear afte
 
 ---
 
-## The Ant-based generation path (the important bit)
+## The Gradle XJC generation path (the important bit)
 
-Legacy banks often had a `build.xml` like:
+The current build applies `com.github.bjornvester.xjc` and configures XJC directly:
 
-```xml
-<taskdef name="xjc" classname="com.sun.tools.xjc.XJCTask" classpathref="jaxb.classpath"/>
-<xjc schema="foo.xsd" destdir="gen" package="com.bank.wsdl"/>
+```groovy
+plugins {
+    id 'com.github.bjornvester.xjc' version '1.9.1'
+}
+
+xjc {
+    xsdDir.set(layout.projectDirectory.dir('wsdl'))
+    includes.set(['ESBTransactionAuthorization_v1_0.xsd'])
+    outputJavaDir.set(layout.buildDirectory.dir('generated-sources/jaxb'))
+    useJakarta.set(true)
+    xjcVersion.set('4.0.9')
+    defaultPackage.set('de.consorsbank.consumingwebservice.wsdl')
+    addCompilationDependencies.set(false)
+    options.add('-extension')
+}
 ```
 
-This project does the **same Ant task**, launched from Gradle so you do not maintain a separate Ant project.
+The plugin registers XJC as a Gradle generation task, integrates generated Java into the main source set, and connects generation to compilation. The project also keeps a `genJaxb` alias for the convenient command `./gradlew genJaxb`.
 
 ```mermaid
 sequenceDiagram
     participant You
     participant Gradle
-    participant Ant as Gradle AntBuilder
-    participant XJC as XJCTask 4.0.5
+    participant Plugin as XJC Gradle plugin
+    participant XJC as XJC 4.0.9
     participant Disk
 
     You->>Gradle: ./gradlew bootRun
-    Gradle->>Gradle: compileJava dependsOn genJaxb
-    Gradle->>Ant: taskdef name=xjc classname=com.sun.tools.xjc.XJCTask
-    Note over Ant: classpath = configurations.jaxb<br/>(API + impl + xjc JARs only)
-    Ant->>XJC: schema=...xsd package=de.consorsbank.consumingwebservice.wsdl
+    Gradle->>Plugin: execute XJC task before Java compilation
+    Plugin->>XJC: XSD + package + Jakarta options
     XJC->>Disk: build/generated-sources/jaxb/**/*.java
     Gradle->>Gradle: compileJava (hand-written + generated)
     Gradle->>You: app on :8080
 ```
 
-Why a separate Gradle configuration named `jaxb`?
+Why use the Gradle plugin instead of AntBuilder?
 
-- XJC is a **build tool**, not part of the running bank app.
-- Putting XJC JARs only on `configurations.jaxb` keeps the Spring runtime classpath clean.
-- The old `javax.xml.bind:jaxb-api` is **excluded** so it cannot sneak in next to `jakarta.xml.bind`.
+- The plugin manages XJC's generator classpath and task integration.
+- Gradle knows the generation task's inputs/outputs and orders it before compilation.
+- The build no longer manually registers `com.sun.tools.xjc.XJCTask` with `ant.taskdef`.
+- The plugin is a community dependency; the migration note documents this maintenance trade-off.
 
 Key `build.gradle` settings:
 
 | Setting | Value | Why |
 |---------|--------|-----|
-| `schema` | `wsdl/ESBTransactionAuthorization_v1_0.xsd` | XJC is an XSD compiler |
-| `destdir` | `build/generated-sources/jaxb` | Gradle `main` Java source dir |
-| `package` | `de.consorsbank.consumingwebservice.wsdl` | Stable import path for the service |
-| `extension` | `true` | Vendor extensions / Jakarta-friendly generation |
-| `compileJava.dependsOn genJaxb` | producer → consumer | Compile never runs on a missing model |
+| `xsdDir` + `includes` | `wsdl/ESBTransactionAuthorization_v1_0.xsd` | XJC processes the standalone schema, not the full WSDL |
+| `outputJavaDir` | `build/generated-sources/jaxb` | Preserve the generated-source output path |
+| `defaultPackage` | `de.consorsbank.consumingwebservice.wsdl` | Stable import path for application code |
+| `useJakarta` / `xjcVersion` | `true` / `4.0.9` | Generate Jakarta JAXB types with aligned XJC |
+| `options.add('-extension')` | XJC extension mode | Preserve the previous generator option |
 
-The `idea {}` block marks that folder as a **Generated Sources Root** so IntelliJ can navigate into `TransactionAuthorizationRequestType`.
+The XJC plugin integrates the generated directory into Java compilation; IntelliJ imports the source directory through the Gradle model.
 
 ---
 
@@ -199,10 +210,11 @@ flowchart TB
 | Piece | Version | Era it belongs to |
 |-------|---------|-------------------|
 | Java toolchain | 21 | Current LTS |
-| Spring Boot | 3.4.0 | Jakarta EE, not Java EE |
-| `jakarta.xml.bind-api` | 4.0.2 | Jakarta EE 10 |
-| `jaxb-impl` / `jaxb-xjc` | 4.0.5 | Same family as the API |
-| Ant | Gradle’s embedded AntBuilder | Legacy generation style |
+| Spring Boot | 4.0.8 | Jakarta EE, Jackson 3, modular starters |
+| Gradle wrapper | 8.14.6 | Boot 4 needs Gradle 8.14+ or 9.x |
+| `jakarta.xml.bind-api` | 4.0.5 | Jakarta EE 10 (Boot BOM) |
+| `jaxb-runtime` / `jaxb-xjc` | 4.0.9 | GlassFish JAXB RI (Boot BOM) |
+| XJC Gradle plugin | 1.9.1 | Build-time schema-to-Java integration |
 
 If someone adds `javax.xml.bind:jaxb-api` “because a blog from 2017 said so”, the generator can fail. That is why `build.gradle` excludes it.
 
