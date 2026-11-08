@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    ESBTransactionAuthorization_v1_0.xsd
+    ======================================
+    This file is the XSD schema extracted from the <wsdl:types> section of
+    ESBTransactionAuthorization_v1_0.wsdl.
+
+    WHY THIS FILE EXISTS:
+    ─────────────────────
+    XJC (the JAXB Schema Compiler) is an *XSD compiler*. It understands XML
+    Schema files but it cannot parse a full WSDL contract because a WSDL
+    contains not just types but also messages, port types, bindings, and
+    service definitions — none of which are XSD constructs.
+
+    Therefore the standard approach for JAXB model generation from a WSDL is:
+      1. Extract the <wsdl:types> → <xsd:schema> content into a separate .xsd.
+      2. Run XJC against the .xsd file.
+
+    This file is the actual input to the genJaxb Gradle task.
+
+    JAXB MODEL GENERATION vs. FULL SOAP CLIENT GENERATION:
+    ────────────────────────────────────────────────────────
+    XJC + this XSD  →  data-binding Java classes only:
+        TransactionAuthorizationRequest.java
+        TransactionAuthorizationResponse.java
+        AuthorizationFault.java
+        ObjectFactory.java
+        package-info.java
+
+    For complete SOAP client stubs (service locator, port interface, etc.)
+    you additionally need:
+        - wsimport (removed from JDK in Java 11+)  OR
+        - Apache CXF wsdl2java                     OR
+        - JAX-WS Metro wsdl2java
+
+    This POC demonstrates the XJC / JAXB model generation path only.
+-->
+<xsd:schema
+        xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+        xmlns:tns="http://consorsbank.de/esb/transactionauthorization/v1"
+        targetNamespace="http://consorsbank.de/esb/transactionauthorization/v1"
+        elementFormDefault="qualified"
+        attributeFormDefault="unqualified">
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         Shared Simple Types
+         ══════════════════════════════════════════════════════════════════ -->
+
+    <!--
+        CurrencyCodeType: ISO 4217 three-letter currency code.
+        XJC generates a Java String field with an @XmlSchemaType annotation.
+    -->
+    <xsd:simpleType name="CurrencyCodeType">
+        <xsd:restriction base="xsd:string">
+            <xsd:pattern value="[A-Z]{3}"/>
+        </xsd:restriction>
+    </xsd:simpleType>
+
+    <!--
+        AuthorizationStatusType: outcome of the authorization decision.
+        XJC generates an enum class  AuthorizationStatusType.java  with four
+        constants: APPROVED, DECLINED, PENDING, ERROR.
+    -->
+    <xsd:simpleType name="AuthorizationStatusType">
+        <xsd:restriction base="xsd:string">
+            <xsd:enumeration value="APPROVED"/>
+            <xsd:enumeration value="DECLINED"/>
+            <xsd:enumeration value="PENDING"/>
+            <xsd:enumeration value="ERROR"/>
+        </xsd:restriction>
+    </xsd:simpleType>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         TransactionAuthorizationRequest
+         ══════════════════════════════════════════════════════════════════ -->
+
+    <!--
+        Complex type with all mandatory and optional fields for a transaction
+        authorization request sent to the ESB.
+
+        XJC generates:
+          TransactionAuthorizationRequest.java  — JAXB-annotated POJO with
+          getters/setters for each child element.
+    -->
+    <xsd:complexType name="TransactionAuthorizationRequestType">
+        <xsd:sequence>
+            <!-- Unique identifier for this transaction -->
+            <xsd:element name="TransactionId"    type="xsd:string"           minOccurs="1" maxOccurs="1"/>
+            <!-- IBAN or account number of the payer -->
+            <xsd:element name="AccountNumber"    type="xsd:string"           minOccurs="1" maxOccurs="1"/>
+            <!-- Transaction amount (up to 19 digits, 4 decimal places) -->
+            <xsd:element name="Amount"           type="xsd:decimal"          minOccurs="1" maxOccurs="1"/>
+            <!-- ISO 4217 currency code, e.g. EUR, USD -->
+            <xsd:element name="Currency"         type="tns:CurrencyCodeType" minOccurs="1" maxOccurs="1"/>
+            <!-- Optional merchant reference -->
+            <xsd:element name="MerchantId"       type="xsd:string"           minOccurs="0" maxOccurs="1"/>
+            <!-- ISO 8601 timestamp of the request -->
+            <xsd:element name="RequestTimestamp" type="xsd:dateTime"         minOccurs="1" maxOccurs="1"/>
+        </xsd:sequence>
+    </xsd:complexType>
+
+    <!-- Global element declaration — this is what XJC exposes as a root element -->
+    <xsd:element name="TransactionAuthorizationRequest"
+                 type="tns:TransactionAuthorizationRequestType"/>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         TransactionAuthorizationResponse
+         ══════════════════════════════════════════════════════════════════ -->
+
+    <!--
+        Response from the ESB authorization service.
+
+        XJC generates:
+          TransactionAuthorizationResponse.java — JAXB-annotated POJO.
+    -->
+    <xsd:complexType name="TransactionAuthorizationResponseType">
+        <xsd:sequence>
+            <!-- Echo of the original transaction ID -->
+            <xsd:element name="TransactionId"       type="xsd:string"                  minOccurs="1" maxOccurs="1"/>
+            <!-- Authorization code from the payment network (absent if declined) -->
+            <xsd:element name="AuthorizationCode"   type="xsd:string"                  minOccurs="0" maxOccurs="1"/>
+            <!-- Decision: APPROVED / DECLINED / PENDING / ERROR -->
+            <xsd:element name="AuthorizationStatus" type="tns:AuthorizationStatusType" minOccurs="1" maxOccurs="1"/>
+            <!-- ISO 8601 timestamp of the response -->
+            <xsd:element name="ResponseTimestamp"   type="xsd:dateTime"                minOccurs="1" maxOccurs="1"/>
+            <!-- Human-readable error description (present only when status=ERROR) -->
+            <xsd:element name="ErrorMessage"        type="xsd:string"                  minOccurs="0" maxOccurs="1"/>
+        </xsd:sequence>
+    </xsd:complexType>
+
+    <xsd:element name="TransactionAuthorizationResponse"
+                 type="tns:TransactionAuthorizationResponseType"/>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         AuthorizationFault
+         ══════════════════════════════════════════════════════════════════ -->
+
+    <!--
+        SOAP fault detail for authorization errors.
+
+        XJC generates:
+          AuthorizationFaultType.java — JAXB-annotated POJO.
+    -->
+    <xsd:complexType name="AuthorizationFaultType">
+        <xsd:sequence>
+            <xsd:element name="FaultCode"    type="xsd:string" minOccurs="1" maxOccurs="1"/>
+            <xsd:element name="FaultMessage" type="xsd:string" minOccurs="1" maxOccurs="1"/>
+        </xsd:sequence>
+    </xsd:complexType>
+
+    <xsd:element name="AuthorizationFault" type="tns:AuthorizationFaultType"/>
+
+</xsd:schema>

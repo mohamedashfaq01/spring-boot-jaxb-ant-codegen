@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Spring Boot JAXB POC — Interactive guide</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a222c;
+      --panel-2: #232d3a;
+      --line: #334155;
+      --text: #e8eef6;
+      --muted: #93a4b8;
+      --accent: #3d9cf0;
+      --ok: #3dd68c;
+      --warn: #f0b429;
+      --bad: #f07178;
+      --soap: #7c9cff;
+      --wsdl: #c084fc;
+      --xsd: #f0b429;
+      --jaxb: #3dd68c;
+      --ant: #fb923c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    header {
+      padding: 2rem 1.25rem 1rem;
+      max-width: 960px;
+      margin: 0 auto;
+    }
+    header h1 { font-size: 1.65rem; font-weight: 650; margin: 0 0 0.4rem; }
+    header p { color: var(--muted); margin: 0; max-width: 48rem; }
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      max-width: 960px;
+      margin: 0 auto 1.25rem;
+      padding: 0 1.25rem;
+    }
+    nav button {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 0.35rem 0.85rem;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    nav button[aria-selected="true"] {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #061018;
+      font-weight: 600;
+    }
+    main { max-width: 960px; margin: 0 auto; padding: 0 1.25rem 3rem; }
+    section { display: none; }
+    section.active { display: block; }
+    h2 { font-size: 1.2rem; margin: 0 0 0.75rem; }
+    h3 { font-size: 1rem; margin: 1.25rem 0 0.5rem; }
+    p.lead { color: var(--muted); margin-top: 0; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 0.75rem;
+    }
+    button.card {
+      text-align: left;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 0.9rem;
+      color: inherit;
+      cursor: pointer;
+      min-height: 8.5rem;
+    }
+    button.card:hover, button.card:focus { border-color: var(--accent); }
+    button.card.selected { outline: 2px solid var(--accent); }
+    .tag {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 650;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-bottom: 0.35rem;
+    }
+    .detail {
+      margin-top: 1rem;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 1rem 1.1rem;
+      min-height: 8rem;
+    }
+    .detail h3 { margin-top: 0; }
+    .muted { color: var(--muted); }
+    .row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+    .chip {
+      border-radius: 8px;
+      padding: 0.35rem 0.65rem;
+      font-size: 0.8rem;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      cursor: pointer;
+      color: var(--text);
+    }
+    .chip.on { background: var(--accent); color: #061018; border-color: var(--accent); font-weight: 600; }
+    .layers { display: flex; flex-direction: column; gap: 0.45rem; }
+    .layer {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 10px;
+      padding: 0.7rem 0.9rem;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .layer:hover, .layer.on { border-color: var(--wsdl); }
+    .envelope {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.82rem;
+      background: #0b1016;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 0.9rem;
+      overflow-x: auto;
+    }
+    .envelope .hit {
+      cursor: pointer;
+      border-radius: 3px;
+      padding: 0 2px;
+    }
+    .envelope .hit:hover, .envelope .hit.on { background: #1e3a5f; }
+    .steps { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.75rem; }
+    .pipe {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.5rem;
+    }
+    .pipe .box {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 0.7rem;
+      opacity: 0.38;
+    }
+    .pipe .box.on { opacity: 1; border-color: var(--ant); }
+    label { display: block; font-size: 0.85rem; color: var(--muted); margin: 0.6rem 0 0.2rem; }
+    input[type="text"], input[type="number"] {
+      width: 100%;
+      max-width: 28rem;
+      background: #0b1016;
+      border: 1px solid var(--line);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 0.5rem 0.65rem;
+    }
+    input[type="range"] { width: 100%; max-width: 28rem; }
+    .result {
+      margin-top: 1rem;
+      border-radius: 12px;
+      padding: 1rem;
+      border: 1px solid var(--line);
+      background: var(--panel);
+    }
+    .result.ok { border-color: var(--ok); }
+    .result.no { border-color: var(--bad); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { color: var(--muted); font-weight: 500; }
+    .era { font-size: 0.8rem; color: var(--muted); }
+    footer { max-width: 960px; margin: 0 auto; padding: 0 1.25rem 2rem; color: var(--muted); font-size: 0.85rem; }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Interactive guide: SOAP, WSDL, XSD, JAXB, Ant</h1>
+    <p>Click around. This matches the Spring Boot JAXB POC: we generate Java classes from a bank-style XSD using Ant’s XJC task, then use those classes behind a JSON API. No real SOAP server is called.</p>
+  </header>
+  <nav role="tablist" aria-label="Guide sections">
+    <button type="button" role="tab" aria-selected="true" data-tab="concepts">Concepts</button>
+    <button type="button" role="tab" aria-selected="false" data-tab="wsdl">WSDL layers</button>
+    <button type="button" role="tab" aria-selected="false" data-tab="soap">SOAP envelope</button>
+    <button type="button" role="tab" aria-selected="false" data-tab="pipeline">Ant + XJC pipeline</button>
+    <button type="button" role="tab" aria-selected="false" data-tab="map">XSD → Java</button>
+    <button type="button" role="tab" aria-selected="false" data-tab="sim">Authorize simulator</button>
+  </nav>
+  <main>
+    <section id="concepts" class="active">
+      <h2>Five ideas, one stack</h2>
+      <p class="lead">Each card is a layer. Click one. The analogy is a bank asking another bank: “May this payment go through?”</p>
+      <div class="grid" id="concept-cards">
+        <button type="button" class="card selected" data-id="soap">
+          <span class="tag" style="color:var(--soap)">SOAP</span>
+          <strong>The letter in a standard envelope</strong>
+          <div class="era">Peak ~2001–2012 · still in banks</div>
+        </button>
+        <button type="button" class="card" data-id="wsdl">
+          <span class="tag" style="color:var(--wsdl)">WSDL</span>
+          <strong>The published contract / menu</strong>
+          <div class="era">Same era as SOAP · still with SOAP</div>
+        </button>
+        <button type="button" class="card" data-id="xsd">
+          <span class="tag" style="color:var(--xsd)">XSD</span>
+          <strong>The form fields and types</strong>
+          <div class="era">XML era · still in ISO 20022 etc.</div>
+        </button>
+        <button type="button" class="card" data-id="jaxb">
+          <span class="tag" style="color:var(--jaxb)">JAXB</span>
+          <strong>Clerk: XML ⇄ Java objects</strong>
+          <div class="era">In JDK until Java 10 · dependency now</div>
+        </button>
+        <button type="button" class="card" data-id="ant">
+          <span class="tag" style="color:var(--ant)">Ant + XJC</span>
+          <strong>Old factory that prints the forms</strong>
+          <div class="era">Build tool peak ~2000–2012</div>
+        </button>
+      </div>
+      <div class="detail" id="concept-detail"></div>
+    </section>
+
+    <section id="wsdl">
+      <h2>A WSDL is a building with five floors</h2>
+      <p class="lead">OpenAPI describes REST. WSDL describes SOAP. Click a floor. This project’s dummy service is <code>AuthorizeTransaction</code>.</p>
+      <div class="layers" id="wsdl-layers"></div>
+      <div class="detail" id="wsdl-detail"></div>
+    </section>
+
+    <section id="soap">
+      <h2>What travels on the wire</h2>
+      <p class="lead">Click a highlighted piece of the envelope. REST would be the inner fields as JSON, with no Envelope/Header/Body ceremony.</p>
+      <div class="envelope" id="soap-xml" aria-label="SOAP envelope, clickable parts"></div>
+      <div class="detail" id="soap-detail">
+        <h3>Click any colored tag</h3>
+        <p class="muted">Envelope, Header, Body, or a business field.</p>
+      </div>
+    </section>
+
+    <section id="pipeline">
+      <h2>How this repo generates code</h2>
+      <p class="lead">Gradle still embeds Ant. We register XJC as an Ant task, the same class old <code>build.xml</code> files used: <code>com.sun.tools.xjc.XJCTask</code>.</p>
+      <div class="steps" id="pipe-steps"></div>
+      <div class="pipe" id="pipe-boxes"></div>
+      <div class="detail" id="pipe-detail"></div>
+      <p class="muted">Then <code>compileJava.dependsOn genJaxb</code> so Spring never compiles against missing classes.</p>
+    </section>
+
+    <section id="map">
+      <h2>What XJC actually emits</h2>
+      <p class="lead">XJC reads the <strong>XSD</strong>, not the full WSDL. Global elements become factory methods. Complex types become classes you import.</p>
+      <table>
+        <thead>
+          <tr><th>In the XSD</th><th>Generated Java</th><th>Used in this POC?</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>TransactionAuthorizationRequestType</code></td>
+            <td>class with getters/setters, <code>@XmlElement</code></td>
+            <td>Yes — health check + service</td>
+          </tr>
+          <tr>
+            <td><code>TransactionAuthorizationResponseType</code></td>
+            <td>class including optional code / error</td>
+            <td>Yes — return type of authorize</td>
+          </tr>
+          <tr>
+            <td><code>AuthorizationStatusType</code> enumerations</td>
+            <td>Java enum APPROVED, DECLINED, PENDING, ERROR</td>
+            <td>Yes — mock sets APPROVED or DECLINED</td>
+          </tr>
+          <tr>
+            <td><code>AuthorizationFaultType</code></td>
+            <td>fault POJO</td>
+            <td>Generated, not used at runtime</td>
+          </tr>
+          <tr>
+            <td>element <code>TransactionAuthorizationRequest</code></td>
+            <td><code>ObjectFactory</code> method returning <code>JAXBElement&lt;…&gt;</code></td>
+            <td>Not called; we use the Type class</td>
+          </tr>
+          <tr>
+            <td><code>xsd:decimal</code> / <code>xsd:dateTime</code></td>
+            <td><code>BigDecimal</code> / <code>XMLGregorianCalendar</code></td>
+            <td>Yes</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="sim">
+      <h2>Same rule as <code>AuthorizationService</code></h2>
+      <p class="lead">JSON in, JAXB-shaped JSON out. Amount <strong>greater than 10_000</strong> is declined. Nothing is sent to an ESB.</p>
+      <label for="iban">accountNumber</label>
+      <input id="iban" type="text" value="DE89370400440532013000" />
+      <label for="amt">amount (<span id="amt-label">250</span>)</label>
+      <input id="amt" type="range" min="0" max="20000" step="50" value="250" />
+      <label for="cur">currency</label>
+      <input id="cur" type="text" value="EUR" maxlength="3" />
+      <div class="result" id="sim-out"></div>
+    </section>
+  </main>
+  <footer>
+    Pair this page with <a href="README.md">docs/README.md</a>,
+    <a href="01-concepts.md">concepts</a>,
+    <a href="02-architecture.md">architecture</a>,
+    and <a href="03-how-to-run.md">how to run</a>.
+  </footer>
+  <script>
+    const concepts = {
+      soap: {
+        title: "SOAP — Simple Object Access Protocol",
+        html: `<p>A standard XML envelope over HTTP POST. Think registered mail: outer wrapper (Envelope), optional tracking (Header), payload (Body).</p>
+          <p><strong>Popular:</strong> early 2000s enterprise “web services”. Microsoft, IBM, Oracle ESBs.</p>
+          <p><strong>Today:</strong> almost nobody starts a <em>new</em> public API in SOAP. Banks, insurers, SAP, government still expose it. You integrate; you do not invent it.</p>
+          <p><strong>In this POC:</strong> we never send SOAP. We only keep the data types a SOAP call would have used.</p>`
+      },
+      wsdl: {
+        title: "WSDL — Web Services Description Language",
+        html: `<p>The contract file. Like OpenAPI, but for SOAP. It lists operations, messages, the XML types, the binding (SOAP 1.2 over HTTP), and the URL.</p>
+          <p><strong>Popular:</strong> same years as SOAP. SoapUI, wsimport, IBM Integration Bus.</p>
+          <p><strong>Today:</strong> you inherit WSDLs from vendors. You rarely write one by hand.</p>
+          <p><strong>Gotcha:</strong> XJC cannot compile a whole WSDL. We extracted <code>&lt;wsdl:types&gt;</code> into a standalone XSD.</p>`
+      },
+      xsd: {
+        title: "XSD — XML Schema Definition",
+        html: `<p>The grammar: required fields, order, types, enums. JSON Schema is the cousin you may know.</p>
+          <p><strong>Popular:</strong> whenever XML was the industry format (payments ISO 20022, healthcare, insurance ACORD).</p>
+          <p><strong>Today:</strong> still the source of truth for those XML standards. Greenfield JSON APIs use OpenAPI instead.</p>
+          <p><strong>In this POC:</strong> <code>wsdl/ESBTransactionAuthorization_v1_0.xsd</code> is the only file XJC reads.</p>`
+      },
+      jaxb: {
+        title: "JAXB — Jakarta XML Binding",
+        html: `<p>Annotations + runtime that map XML to Java objects. <em>Unmarshal</em> = XML → object. <em>Marshal</em> = object → XML. <em>XJC</em> writes the classes from an XSD.</p>
+          <p><strong>Popular:</strong> JAXB 2 with Java EE 5 (~2006). Shipped <em>inside</em> the JDK from Java 6 to 10 as <code>javax.xml.bind</code>.</p>
+          <p><strong>Break:</strong> Java 11 removed it. Jakarta EE renamed the package to <code>jakarta.xml.bind</code>. Spring Boot 3 needs the Jakarta line. Mixing javax + jakarta explodes at runtime.</p>
+          <p><strong>Today:</strong> default for Java XML/SOAP integration. New JSON services use Jackson.</p>`
+      },
+      ant: {
+        title: "Apache Ant (and why Gradle still calls it)",
+        html: `<p>XML build scripts. Targets, not a real task graph. Default Java build tool in the 2000s before Maven then Gradle.</p>
+          <p><strong>Today:</strong> not for new apps. JAXB’s XJC still ships an Ant task, so many banks never rewrote that step.</p>
+          <p><strong>Here:</strong> Gradle task <code>genJaxb</code> → <code>project.ant.taskdef</code> → <code>ant.xjc</code>. Same generator, modern orchestrator. Tool JARs sit on a dedicated <code>jaxb</code> configuration so they do not pollute Spring’s runtime classpath.</p>`
+      }
+    };
+
+    const conceptDetail = document.getElementById("concept-detail");
+    function showConcept(id) {
+      document.querySelectorAll("#concept-cards .card").forEach((c) => {
+        c.classList.toggle("selected", c.dataset.id === id);
+      });
+      const c = concepts[id];
+      conceptDetail.innerHTML = `<h3>${c.title}</h3>${c.html}`;
+    }
+    document.getElementById("concept-cards").addEventListener("click", (e) => {
+      const btn = e.target.closest("button.card");
+      if (btn) showConcept(btn.dataset.id);
+    });
+    showConcept("soap");
+
+    const wsdlFloors = [
+      { id: "types", name: "types", hint: "XSD lives here",
+        text: "Data shapes only. In the real WSDL this is an embedded schema. We copied it to ESBTransactionAuthorization_v1_0.xsd because XJC understands XSD, not WSDL." },
+      { id: "messages", name: "messages", hint: "Request / response / fault",
+        text: "Named bags: TransactionAuthorizationRequestMessage, ResponseMessage, AuthorizationFaultMessage. Each points at an XSD element." },
+      { id: "portType", name: "portType", hint: "Java interface analogue",
+        text: "Abstract operation AuthorizeTransaction: one input, one output, one fault. No URL yet — like an interface with no implementation." },
+      { id: "binding", name: "binding", hint: "SOAP 1.2 document/literal",
+        text: "How to put the abstract operation on the wire: SOAP over HTTP, document style, literal body, soapAction URL." },
+      { id: "service", name: "service", hint: "The actual address",
+        text: "Dummy URL: http://esb.consorsbank.de/services/TransactionAuthorizationService/v1 — this POC does not call it." }
+    ];
+    const wsdlLayers = document.getElementById("wsdl-layers");
+    const wsdlDetail = document.getElementById("wsdl-detail");
+    wsdlFloors.forEach((f, i) => {
+      const el = document.createElement("button");
+      el.type = "button";
+      el.className = "layer" + (i === 0 ? " on" : "");
+      el.dataset.i = String(i);
+      el.innerHTML = `<span><strong>${5 - i}. ${f.name}</strong> — ${f.hint}</span><span class="muted">click</span>`;
+      wsdlLayers.appendChild(el);
+    });
+    function showFloor(i) {
+      document.querySelectorAll("#wsdl-layers .layer").forEach((n, j) => n.classList.toggle("on", j === i));
+      const f = wsdlFloors[i];
+      wsdlDetail.innerHTML = `<h3>${f.name}</h3><p>${f.text}</p>`;
+    }
+    wsdlLayers.addEventListener("click", (e) => {
+      const b = e.target.closest(".layer");
+      if (b) showFloor(Number(b.dataset.i));
+    });
+    showFloor(0);
+
+    const soapParts = {
+      env: { title: "soap:Envelope", text: "The outer wrapper. Every SOAP message has exactly one. Without it, a SOAP stack will reject the HTTP body." },
+      hdr: { title: "soap:Header", text: "Optional. Security tokens, correlation ids, routing. This dummy leaves it empty. WS-Security usually lives here." },
+      body: { title: "soap:Body", text: "The business payload. In document/literal style, the child element name matches the XSD global element." },
+      req: { title: "TransactionAuthorizationRequest", text: "The XSD global element. JAXB would unmarshal this into TransactionAuthorizationRequestType (via ObjectFactory / JAXBElement)." },
+      amt: { title: "Amount", text: "xsd:decimal → Java BigDecimal. This POC’s mock declines when the number is greater than 10_000." },
+      cur: { title: "Currency", text: "Restricted to three A–Z letters in the XSD. XJC still types it as String." }
+    };
+    document.getElementById("soap-xml").innerHTML = `<span class="hit" data-k="env">&lt;soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope"&gt;</span>
+  <span class="hit" data-k="hdr">&lt;soap:Header/&gt;</span>
+  <span class="hit" data-k="body">&lt;soap:Body&gt;</span>
+    <span class="hit" data-k="req">&lt;TransactionAuthorizationRequest xmlns="http://consorsbank.de/esb/transactionauthorization/v1"&gt;</span>
+      &lt;TransactionId&gt;11111111-1111-1111-1111-111111111111&lt;/TransactionId&gt;
+      &lt;AccountNumber&gt;DE89370400440532013000&lt;/AccountNumber&gt;
+      <span class="hit" data-k="amt">&lt;Amount&gt;250.00&lt;/Amount&gt;</span>
+      <span class="hit" data-k="cur">&lt;Currency&gt;EUR&lt;/Currency&gt;</span>
+      &lt;RequestTimestamp&gt;2026-11-08T14:22:01+01:00&lt;/RequestTimestamp&gt;
+    &lt;/TransactionAuthorizationRequest&gt;
+  &lt;/soap:Body&gt;
+&lt;/soap:Envelope&gt;`;
+    const soapDetail = document.getElementById("soap-detail");
+    document.getElementById("soap-xml").addEventListener("click", (e) => {
+      const hit = e.target.closest(".hit");
+      if (!hit) return;
+      document.querySelectorAll("#soap-xml .hit").forEach((n) => n.classList.toggle("on", n === hit));
+      const p = soapParts[hit.dataset.k];
+      soapDetail.innerHTML = `<h3>${p.title}</h3><p>${p.text}</p>`;
+    });
+
+    const pipe = [
+      { name: "1. XSD file", text: "Input: wsdl/ESBTransactionAuthorization_v1_0.xsd (extracted from the WSDL types section)." },
+      { name: "2. Gradle genJaxb", text: "A Groovy task with inputs.file / outputs.dir so incremental builds can skip when nothing changed." },
+      { name: "3. Ant taskdef", text: "project.ant.taskdef name=xjc, classname=com.sun.tools.xjc.XJCTask, classpath=configurations.jaxb. Same Ant API as a 2008 build.xml." },
+      { name: "4. ant.xjc", text: "schema + destdir + package de.consorsbank.consumingwebservice.wsdl + extension=true." },
+      { name: "5. Generated .java", text: "Written to build/generated-sources/jaxb. Added to sourceSets.main.java.srcDir. Do not edit by hand." },
+      { name: "6. compileJava + Boot", text: "AuthorizationService imports the generated types. REST JSON is only a demo facade." }
+    ];
+    const pipeSteps = document.getElementById("pipe-steps");
+    const pipeBoxes = document.getElementById("pipe-boxes");
+    pipe.forEach((s, i) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "chip" + (i === 0 ? " on" : "");
+      b.textContent = s.name;
+      b.dataset.i = String(i);
+      pipeSteps.appendChild(b);
+      const box = document.createElement("div");
+      box.className = "box" + (i === 0 ? " on" : "");
+      box.textContent = s.name;
+      pipeBoxes.appendChild(box);
+    });
+    function showPipe(i) {
+      document.querySelectorAll("#pipe-steps .chip").forEach((n, j) => n.classList.toggle("on", j === i));
+      document.querySelectorAll("#pipe-boxes .box").forEach((n, j) => n.classList.toggle("on", j <= i));
+      document.getElementById("pipe-detail").innerHTML = `<h3>${pipe[i].name}</h3><p>${pipe[i].text}</p>`;
+    }
+    pipeSteps.addEventListener("click", (e) => {
+      const b = e.target.closest(".chip");
+      if (b) showPipe(Number(b.dataset.i));
+    });
+    showPipe(0);
+
+    const amt = document.getElementById("amt");
+    const amtLabel = document.getElementById("amt-label");
+    const simOut = document.getElementById("sim-out");
+    function uuid() {
+      const h = () => Math.floor((1 + Math.random()) * 0x10000).toString(16).slice(1);
+      return `${h()}${h()}-${h()}-${h()}-${h()}-${h()}${h()}${h()}`;
+    }
+    function simulate() {
+      const amount = Number(amt.value);
+      amtLabel.textContent = String(amount);
+      const declined = amount > 10000;
+      const id = uuid();
+      const ts = new Date().toISOString();
+      const body = {
+        transactionId: id,
+        authorizationStatus: declined ? "DECLINED" : "APPROVED",
+        authorizationCode: declined ? null : "AUTH-" + uuid().slice(0, 8).toUpperCase(),
+        responseTimestamp: ts,
+        errorMessage: declined ? "Amount exceeds per-transaction limit" : null
+      };
+      simOut.className = "result " + (declined ? "no" : "ok");
+      simOut.innerHTML = `<p><strong>${declined ? "DECLINED" : "APPROVED"}</strong> — same branch as AuthorizationService (amount &gt; 10000).</p>
+        <p class="muted">POST /api/authorize with accountNumber=${document.getElementById("iban").value}, amount=${amount}, currency=${document.getElementById("cur").value}</p>
+        <pre style="white-space:pre-wrap;margin:0">${JSON.stringify(body, null, 2)}</pre>`;
+    }
+    amt.addEventListener("input", simulate);
+    document.getElementById("iban").addEventListener("input", simulate);
+    document.getElementById("cur").addEventListener("input", simulate);
+    simulate();
+
+    document.querySelectorAll("nav [data-tab]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const tab = btn.dataset.tab;
+        document.querySelectorAll("nav [data-tab]").forEach((b) => b.setAttribute("aria-selected", b === btn ? "true" : "false"));
+        document.querySelectorAll("main > section").forEach((s) => s.classList.toggle("active", s.id === tab));
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: springboot-jaxb-poc
+
+server:
+  port: 8080
+
+logging:
+  level:
+    de.consorsbank: DEBUG
+    root: INFO

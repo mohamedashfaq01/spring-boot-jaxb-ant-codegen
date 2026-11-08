@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    ESBTransactionAuthorization_v1_0.wsdl
+    ======================================
+    Minimal dummy WSDL for the ESB Transaction Authorization service.
+
+    IMPORTANT NOTE FOR XJC:
+    ========================
+    XJC (the JAXB schema compiler) is an *XSD compiler*, not a WSDL compiler.
+    It can only process XML Schema Definition (.xsd) files.
+
+    To generate JAXB data-binding classes with XJC you must:
+      1. Identify the <wsdl:types> section below (which contains the XSD).
+      2. Extract that XSD into a standalone .xsd file.
+      3. Pass the .xsd file to XJC.
+
+    The companion file  ESBTransactionAuthorization_v1_0.xsd  contains the
+    extracted schema and is the actual input to the genJaxb task.
+
+    If you also need full SOAP client stub generation (proxy classes,
+    service locators, port types, etc.) you need a separate tool:
+      - wsimport  (bundled with the JDK up to Java 10; removed in Java 11+)
+      - Apache CXF wsdl2java
+      - JAX-WS RI / metro wsdl2java
+
+    This POC focuses exclusively on JAXB model (data-binding) class generation
+    via XJC, as requested.
+-->
+<wsdl:definitions
+        xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
+        xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap12/"
+        xmlns:tns="http://consorsbank.de/esb/transactionauthorization/v1"
+        xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+        targetNamespace="http://consorsbank.de/esb/transactionauthorization/v1"
+        name="ESBTransactionAuthorizationService">
+
+    <!-- ====================================================================
+         Types Section
+         The embedded XSD schema defines the request/response data structures.
+         This is the section that must be extracted for XJC.
+         ==================================================================== -->
+    <wsdl:types>
+        <xsd:schema
+                targetNamespace="http://consorsbank.de/esb/transactionauthorization/v1"
+                xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+                elementFormDefault="qualified"
+                attributeFormDefault="unqualified">
+
+            <!-- ── Shared Simple Types ──────────────────────────────────── -->
+
+            <xsd:simpleType name="CurrencyCodeType">
+                <xsd:restriction base="xsd:string">
+                    <xsd:pattern value="[A-Z]{3}"/>
+                </xsd:restriction>
+            </xsd:simpleType>
+
+            <xsd:simpleType name="AuthorizationStatusType">
+                <xsd:restriction base="xsd:string">
+                    <xsd:enumeration value="APPROVED"/>
+                    <xsd:enumeration value="DECLINED"/>
+                    <xsd:enumeration value="PENDING"/>
+                    <xsd:enumeration value="ERROR"/>
+                </xsd:restriction>
+            </xsd:simpleType>
+
+            <!-- ── TransactionAuthorizationRequest ──────────────────────── -->
+
+            <xsd:complexType name="TransactionAuthorizationRequestType">
+                <xsd:sequence>
+                    <xsd:element name="TransactionId"   type="xsd:string"          minOccurs="1" maxOccurs="1"/>
+                    <xsd:element name="AccountNumber"   type="xsd:string"          minOccurs="1" maxOccurs="1"/>
+                    <xsd:element name="Amount"          type="xsd:decimal"         minOccurs="1" maxOccurs="1"/>
+                    <xsd:element name="Currency"        type="tns:CurrencyCodeType" minOccurs="1" maxOccurs="1"/>
+                    <xsd:element name="MerchantId"      type="xsd:string"          minOccurs="0" maxOccurs="1"/>
+                    <xsd:element name="RequestTimestamp" type="xsd:dateTime"       minOccurs="1" maxOccurs="1"/>
+                </xsd:sequence>
+            </xsd:complexType>
+
+            <xsd:element name="TransactionAuthorizationRequest"
+                         type="tns:TransactionAuthorizationRequestType"/>
+
+            <!-- ── TransactionAuthorizationResponse ─────────────────────── -->
+
+            <xsd:complexType name="TransactionAuthorizationResponseType">
+                <xsd:sequence>
+                    <xsd:element name="TransactionId"       type="xsd:string"                   minOccurs="1" maxOccurs="1"/>
+                    <xsd:element name="AuthorizationCode"   type="xsd:string"                   minOccurs="0" maxOccurs="1"/>
+                    <xsd:element name="AuthorizationStatus" type="tns:AuthorizationStatusType"  minOccurs="1" maxOccurs="1"/>
+                    <xsd:element name="ResponseTimestamp"   type="xsd:dateTime"                 minOccurs="1" maxOccurs="1"/>
+                    <xsd:element name="ErrorMessage"        type="xsd:string"                   minOccurs="0" maxOccurs="1"/>
+                </xsd:sequence>
+            </xsd:complexType>
+
+            <xsd:element name="TransactionAuthorizationResponse"
+                         type="tns:TransactionAuthorizationResponseType"/>
+
+            <!-- ── Fault type ────────────────────────────────────────────── -->
+
+            <xsd:complexType name="AuthorizationFaultType">
+                <xsd:sequence>
+                    <xsd:element name="FaultCode"    type="xsd:string" minOccurs="1" maxOccurs="1"/>
+                    <xsd:element name="FaultMessage" type="xsd:string" minOccurs="1" maxOccurs="1"/>
+                </xsd:sequence>
+            </xsd:complexType>
+
+            <xsd:element name="AuthorizationFault" type="tns:AuthorizationFaultType"/>
+
+        </xsd:schema>
+    </wsdl:types>
+
+    <!-- ====================================================================
+         Messages
+         ==================================================================== -->
+    <wsdl:message name="TransactionAuthorizationRequestMessage">
+        <wsdl:part name="parameters" element="tns:TransactionAuthorizationRequest"/>
+    </wsdl:message>
+
+    <wsdl:message name="TransactionAuthorizationResponseMessage">
+        <wsdl:part name="parameters" element="tns:TransactionAuthorizationResponse"/>
+    </wsdl:message>
+
+    <wsdl:message name="AuthorizationFaultMessage">
+        <wsdl:part name="parameters" element="tns:AuthorizationFault"/>
+    </wsdl:message>
+
+    <!-- ====================================================================
+         Port Type (abstract interface)
+         ==================================================================== -->
+    <wsdl:portType name="TransactionAuthorizationPortType">
+        <wsdl:operation name="AuthorizeTransaction">
+            <wsdl:input  message="tns:TransactionAuthorizationRequestMessage"/>
+            <wsdl:output message="tns:TransactionAuthorizationResponseMessage"/>
+            <wsdl:fault  name="AuthorizationFault" message="tns:AuthorizationFaultMessage"/>
+        </wsdl:operation>
+    </wsdl:portType>
+
+    <!-- ====================================================================
+         Binding (SOAP 1.2 over HTTP)
+         ==================================================================== -->
+    <wsdl:binding name="TransactionAuthorizationBinding"
+                  type="tns:TransactionAuthorizationPortType">
+        <soap:binding style="document"
+                      transport="http://schemas.xmlsoap.org/soap/http"/>
+        <wsdl:operation name="AuthorizeTransaction">
+            <soap:operation soapAction="http://consorsbank.de/esb/transactionauthorization/v1/AuthorizeTransaction"/>
+            <wsdl:input>
+                <soap:body use="literal"/>
+            </wsdl:input>
+            <wsdl:output>
+                <soap:body use="literal"/>
+            </wsdl:output>
+            <wsdl:fault name="AuthorizationFault">
+                <soap:fault name="AuthorizationFault" use="literal"/>
+            </wsdl:fault>
+        </wsdl:operation>
+    </wsdl:binding>
+
+    <!-- ====================================================================
+         Service (concrete endpoint)
+         ==================================================================== -->
+    <wsdl:service name="ESBTransactionAuthorizationService">
+        <wsdl:port name="TransactionAuthorizationPort"
+                   binding="tns:TransactionAuthorizationBinding">
+            <soap:address location="http://esb.consorsbank.de/services/TransactionAuthorizationService/v1"/>
+        </wsdl:port>
+    </wsdl:service>
+
+</wsdl:definitions>

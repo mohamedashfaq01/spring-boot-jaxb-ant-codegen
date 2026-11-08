@@ -1,0 +1,213 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.4.0'
+    id 'io.spring.dependency-management' version '1.1.6'
+}
+
+group = 'de.consorsbank'
+version = '0.0.1-SNAPSHOT'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Java 21 Toolchain
+// Using a toolchain rather than sourceCompatibility/targetCompatibility ensures
+// Gradle downloads and uses an exact JDK version regardless of the host JVM.
+// ─────────────────────────────────────────────────────────────────────────────
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Custom 'jaxb' configuration
+//
+// WHY a separate configuration?
+//   - We only need XJC tooling on the code-generation classpath, not at
+//     application runtime. A dedicated configuration keeps the runtime
+//     classpath clean and mirrors how legacy Ant-based builds isolated the
+//     JAXB tool JARs from the application JARs.
+//
+// VERSION CHOICES (all from the same EclipseLink MOXy / Jakarta EE 10 family):
+//   jakarta.xml.bind-api   4.0.2  → the Jakarta EE 10 JAXB API (replaces
+//                                    javax.xml.bind from JAXB 2.x).
+//   jakarta.activation-api 2.1.3  → companion activation API required by JAXB.
+//   jaxb-impl              4.0.5  → EclipseLink MOXy runtime (Jakarta EE 10).
+//   jaxb-xjc               4.0.5  → XJC compiler tool that reads XSD and writes
+//                                    .java files; must match jaxb-impl exactly.
+//
+// WHY NOT jaxb-api (com.sun.xml.bind:jaxb-api)?
+//   That artifact belongs to the old javax.xml.bind namespace (JAXB 2.x).
+//   Mixing it with the jakarta.xml.bind namespace (JAXB 4.x) causes
+//   ClassNotFoundException / NoSuchMethodError at XJC startup because
+//   two incompatible JAXB API packages end up on the same classpath.
+//   We explicitly exclude it here as a safety net.
+//
+// WHY NOT glassfish/jaxb-ri 4.0.x directly?
+//   com.sun.xml.bind:jaxb-impl:4.0.x is the same EclipseLink/RI artifact
+//   that gets re-released under the org.glassfish.jaxb group id. We use the
+//   com.sun.xml.bind coordinates because they are more widely documented and
+//   because the pom ships with cleaner transitive dependency declarations for
+//   the XJC use-case.
+// ─────────────────────────────────────────────────────────────────────────────
+configurations {
+    jaxb {
+        description = 'Classpath for JAXB XJC code-generation tool (Ant-based)'
+        // Prevent the old javax-namespace JAXB API from leaking in through
+        // any transitive dependency chain.
+        exclude group: 'javax.xml.bind', module: 'jaxb-api'
+        exclude group: 'com.sun.xml.bind', module: 'jaxb-api'
+    }
+}
+
+dependencies {
+    // ── Application runtime ──────────────────────────────────────────────────
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    // Jakarta JAXB API on the runtime classpath so application code can use
+    // @XmlRootElement, JAXBContext, etc. from the generated classes.
+    implementation 'jakarta.xml.bind:jakarta.xml.bind-api:4.0.2'
+
+    // EclipseLink MOXy JAXB runtime (implements the API above at runtime).
+    runtimeOnly 'com.sun.xml.bind:jaxb-impl:4.0.5'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+
+    // ── JAXB XJC code-generation tool classpath ──────────────────────────────
+    // These JARs are only needed to *run* XJC during the build; they are NOT
+    // added to the application's compile or runtime classpath.
+    jaxb 'jakarta.xml.bind:jakarta.xml.bind-api:4.0.2'
+    jaxb 'jakarta.activation:jakarta.activation-api:2.1.3'
+    jaxb 'com.sun.xml.bind:jaxb-impl:4.0.5'
+    jaxb 'com.sun.xml.bind:jaxb-xjc:4.0.5'
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Source Set Configuration
+//
+// We register build/generated-sources/jaxb as an additional Java source
+// directory inside the 'main' source set.
+//
+// Effect:
+//   1. Gradle's compileJava task sees these sources automatically.
+//   2. IntelliJ IDEA (via its Gradle import) marks the directory as a
+//      "Generated Sources Root", so navigation and import resolution work.
+//   3. The compiled .class files land in the same build/classes/java/main
+//      output directory as the hand-written classes, so there is no need to
+//      add a second classpath entry for the generated code.
+//
+// WHY NOT a separate source set?
+//   A separate source set would require a separate compile task and an extra
+//   classpath configuration. Because the generated classes are used directly
+//   by application code (AuthorizationService imports the generated types)
+//   they must be compiled together with main sources. Adding the generated
+//   directory to main's srcDirs is the simplest, correct approach.
+// ─────────────────────────────────────────────────────────────────────────────
+def jaxbGeneratedSources = "$buildDir/generated-sources/jaxb"
+def jaxbCompiledClasses  = "$buildDir/classes/jaxb"   // only used as XJC output
+                                                        // dir; actual .class files
+                                                        // land in classes/java/main
+
+sourceSets {
+    main {
+        java {
+            // Gradle automatically creates this directory if it does not yet
+            // exist, so the build works from a clean checkout.
+            srcDir jaxbGeneratedSources
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// genJaxb Task  — JAXB XJC via Apache Ant (project.ant / AntBuilder)
+//
+// Architecture of the invocation:
+//   Gradle task (Groovy) → project.ant (AntBuilder) → taskdef (loads XJC Ant
+//   task class from the 'jaxb' configuration classpath) → xjc Ant task →
+//   XJC compiler → writes .java files to jaxbGeneratedSources directory.
+//
+// Key design decisions:
+//   1. taskdef uses the 'jaxb' configuration as its classpath so that XJC
+//      runs with exactly the JARs we declared — no contamination from the
+//      application's compile classpath.
+//   2. We pass the XSD file (extracted from the WSDL) to XJC because XJC
+//      is an *XSD* compiler, not a WSDL compiler. Processing a full WSDL
+//      directly is not supported by XJC; that is the job of wsimport/CXF.
+//      This POC focuses on JAXB model generation (data-binding classes) only.
+//   3. The 'produces' output directory declaration lets Gradle skip the task
+//      on incremental builds when the sources are already up-to-date.
+// ─────────────────────────────────────────────────────────────────────────────
+task genJaxb {
+    description = 'Generate JAXB Java sources from the ESB authorization XSD using XJC via Apache Ant.'
+    group       = 'code generation'
+
+    // Declare inputs and outputs so Gradle can skip on UP-TO-DATE checks.
+    def xsdFile = file("$projectDir/wsdl/ESBTransactionAuthorization_v1_0.xsd")
+    inputs.file  xsdFile
+    outputs.dir  jaxbGeneratedSources
+
+    doLast {
+        // 1. Create the output directory if it doesn't exist.
+        mkdir jaxbGeneratedSources
+        mkdir jaxbCompiledClasses
+
+        // 2. Build the Ant path element from the 'jaxb' configuration.
+        //    project.ant gives us the AntBuilder instance embedded in Gradle.
+        ant.taskdef(
+            name      : 'xjc',
+            classname : 'com.sun.tools.xjc.XJCTask',
+            classpath : configurations.jaxb.asPath
+        )
+
+        // 3. Invoke the XJC Ant task.
+        //
+        //    schema  → the XSD file to process
+        //    destdir → where the generated .java files are written
+        //    package → Java package for the generated classes
+        //
+        //    extension=true is required when using Jakarta namespace bindings
+        //    because the Jakarta spec compliance mode is not the default in
+        //    some XJC versions; it enables vendor extensions including the
+        //    correct @XmlRootElement placement.
+        ant.xjc(
+            schema    : xsdFile.absolutePath,
+            destdir   : jaxbGeneratedSources,
+            package   : 'de.consorsbank.consumingwebservice.wsdl',
+            extension : 'true'
+        )
+
+        println "✅ JAXB sources generated in: ${jaxbGeneratedSources}"
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Task Dependency
+//
+// compileJava must wait for genJaxb to finish so that the generated .java
+// files are present before the Java compiler runs.
+//
+// Using dependsOn is correct here (not mustRunAfter) because genJaxb
+// *produces* outputs that compileJava *consumes*. dependsOn expresses a
+// true producer → consumer dependency.
+// ─────────────────────────────────────────────────────────────────────────────
+compileJava.dependsOn genJaxb
+
+// ─────────────────────────────────────────────────────────────────────────────
+// IntelliJ IDEA support
+//
+// When IntelliJ imports the project via its built-in Gradle integration it
+// reads the idea{} block to decide which directories to mark as source roots.
+// Registering jaxbGeneratedSources here ensures the IDE marks it as a
+// "Generated Sources Root" immediately, without requiring a separate manual
+// step in the IDE.
+// ─────────────────────────────────────────────────────────────────────────────
+apply plugin: 'idea'
+
+idea {
+    module {
+        generatedSourceDirs += file(jaxbGeneratedSources)
+    }
+}
